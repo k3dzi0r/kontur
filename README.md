@@ -48,7 +48,8 @@ Rejestr w `src/modes/index.ts`, uruchamianie przez `src/pipeline/index.ts` (`run
   ramka, otwór do zawieszenia (gdy wypada na wzorze — automatyczne „ucho”). Leży płasko, mostki niepotrzebne.
 - **Podstawka wsuwana** — Wycinanka z cokołem typu `slot`: figurka musi być jednym kawałkiem (mostki do głównej bryły),
   płaska stopa, język pod najszerszą stopą, slot = język + 2·luz. Eksport: 2 obiekty (figurka na płasko + cokół),
-  3MF z dwoma obiektami; podgląd „Złożenie”.
+  3MF z dwoma obiektami; podgląd „Złożenie”. Slot ma fazkę 0,4 mm na wejściu. „Pobierz próbkę luzu” generuje
+  cokolik z 3 slotami (luz −0,1 / bieżący / +0,1 mm, oznaczone 1–3 wgłębieniami) i kupon języka (`mesh/calibration.ts`).
 - **Lithophane** (`pipeline/lithophane.ts`) — grubość z jasności (min–maks, gamma, negatyw), ramka o maks. grubości,
   siatka budowana bezpośrednio (mapa wysokości + ściany + dno-wachlarz — zamknięta z konstrukcji), podgląd
   symulowanego podświetlenia. Leży płasko (TODO: wariant pionowy / zakrzywiony).

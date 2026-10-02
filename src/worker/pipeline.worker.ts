@@ -6,6 +6,7 @@ import { setGeometryKernel } from '../geometry/clip';
 import { buildMask } from '../image/process';
 import { otsuThreshold, gaussianBlur } from '../image/threshold';
 import { runJob } from '../pipeline';
+import { buildClearanceSample } from '../mesh/calibration';
 import type { WorkerRequest, WorkerResponse } from './protocol';
 
 declare const self: DedicatedWorkerGlobalScope;
@@ -52,6 +53,9 @@ self.onmessage = async (ev: MessageEvent<WorkerRequest>) => {
       const output = runJob(kernel, { mask: () => maskFor(ip), gray: () => gaussianBlur(gray!, ip.blur) }, req.job);
       const transfer: Transferable[] = output ? [output.mesh.positions.buffer, output.mesh.indices.buffer] : [];
       post({ type: 'generate', id: req.id, output, ms: performance.now() - t }, transfer);
+    } else if (req.type === 'calibration') {
+      const kernel = await ready;
+      post({ type: 'calibration', id: req.id, parts: buildClearanceSample(kernel, req.options) });
     }
   } catch (e) {
     console.error('[pipeline.worker]', e instanceof Error ? e.stack : e);

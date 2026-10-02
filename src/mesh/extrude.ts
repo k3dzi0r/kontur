@@ -153,6 +153,28 @@ function mergeMeshes(meshes: MeshData[]): MeshData {
 
 export { mergeMeshes };
 
+/** Fazka 45° na wejściu slotu — ułatwia wsunięcie języka, maskuje „słoniową stopę” krawędzi. */
+export const SLOT_CHAMFER = 0.4;
+
+/**
+ * Wybranie slotu: prostopadłościan sw×st głęboki na sd od `topZ` w dół,
+ * wyśrodkowany w (cx, 0), z fazką 45° przy wejściu. Fazka wystaje 0,5 mm
+ * ponad górę, żeby różnica nie miała współpłaszczyznowych ścian.
+ */
+export function slotPocket(wasm: ManifoldToplevel, sw: number, st: number, sd: number, topZ: number, cx: number): Manifold {
+  const { CrossSection, Manifold } = wasm;
+  const ch = Math.min(SLOT_CHAMFER, st / 2, sd / 3);
+  const box = Manifold.cube([sw, st, sd + 1]);
+  const boxPlaced = box.translate([cx - sw / 2, -st / 2, topZ - sd]);
+  const rect = CrossSection.square([sw, st], true);
+  const h = ch + 0.5;
+  const frustum = Manifold.extrude(rect, h, 0, 0, [(sw + 2 * h) / sw, (st + 2 * h) / st]);
+  const frustumPlaced = frustum.translate([cx, 0, topZ - ch]);
+  const out = Manifold.union(boxPlaced, frustumPlaced);
+  for (const o of [box, boxPlaced, rect, frustum, frustumPlaced]) o.delete();
+  return out;
+}
+
 /**
  * Podstawka wsuwana — dwie osobne bryły:
  *  - figurka (z językiem) leżąca płasko na stole: z = 0..grubość,
@@ -180,9 +202,7 @@ export function buildSlotParts(
     if (r > 0) foot = keep(foot.offset(r, 'Round'));
     const block = keep(Manifold.extrude(foot, base.height));
     const [sw, st, sd] = slot.slotSize;
-    const pocket = keep(
-      keep(Manifold.cube([sw, st, sd + 1])).translate([(slot.x0 + slot.x1) / 2 - xc - sw / 2, -st / 2, base.height - sd]),
-    );
+    const pocket = keep(slotPocket(wasm, sw, st, sd, base.height, (slot.x0 + slot.x1) / 2 - xc));
     const baseSolid = keep(Manifold.difference(block, pocket));
 
     const cs = keep(new CrossSection(figure.flatMap((p) => [p.outer, ...p.holes]), 'EvenOdd'));

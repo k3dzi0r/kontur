@@ -57,6 +57,7 @@ interface State {
   removeBridgeEdit: (index: number) => Promise<void>;
   clearBridgeEdits: () => Promise<void>;
   exportFile: (format: 'stl' | '3mf') => void;
+  exportClearanceSample: () => Promise<void>;
 }
 
 const client = new PipelineClient();
@@ -258,6 +259,23 @@ export const useStore = create<State>((set, get) => {
       if (c.bridgeEdits.length === 0) return;
       set({ cutoutParams: { ...c, bridgeEdits: [] } });
       await get().generate();
+    },
+
+    async exportClearanceSample() {
+      const { cutoutParams: c } = get();
+      const mid = c.base.clearance;
+      const clearances = [mid - 0.1, mid, mid + 0.1].map((x) => Math.round(Math.max(0.05, x) * 100) / 100);
+      try {
+        const r = await client.calibration({ thickness: c.thickness, slotDepth: c.base.slotDepth, clearances });
+        const label = clearances.map((x) => x.toFixed(2).replace('0.', '')).join('-');
+        download(
+          export3mf(r.parts.map((p) => ({ name: p.name, mesh: p.mesh })), 'probka-luzu') as BlobPart,
+          `probka-luzu-${label}.3mf`,
+          'model/3mf',
+        );
+      } catch (e) {
+        set({ error: `Próbka luzu: ${(e as Error).message}` });
+      }
     },
 
     exportFile(format) {

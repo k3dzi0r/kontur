@@ -1,5 +1,6 @@
 import type { GrayImage, ImageParams } from '../types';
 import type { GenerateJob } from '../pipeline';
+import type { ClearanceSampleOptions } from '../mesh/calibration';
 import type { WorkerRequest, WorkerResponse } from './protocol';
 
 type Pending = { resolve: (r: WorkerResponse) => void; reject: (e: Error) => void };
@@ -41,6 +42,10 @@ export class PipelineClient {
 
   mask(imageParams: ImageParams) {
     return this.send<'mask'>({ type: 'mask', id: this.nextId++, imageParams });
+  }
+
+  calibration(options: ClearanceSampleOptions) {
+    return this.send<'calibration'>({ type: 'calibration', id: this.nextId++, options });
   }
 
   generate(imageParams: ImageParams, job: GenerateJob) {

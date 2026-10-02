@@ -159,3 +159,4 @@ figcaption { color: var(--muted); font-size: 11px; }
 @media (max-width: 1100px) {
   .viewport { min-height: min(70vh, 560px); }
 }
+.note { margin: 0; font-size: 11px; color: var(--muted); line-height: 1.4; }

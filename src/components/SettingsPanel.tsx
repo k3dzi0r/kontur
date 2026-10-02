@@ -19,6 +19,7 @@ export function SettingsPanel() {
   const lp = useStore((s) => s.lithophaneParams);
   const setL = useStore((s) => s.setLithophaneParams);
   const litho = mode === 'lithophane';
+  const exportClearanceSample = useStore((s) => s.exportClearanceSample);
 
   return (
     <div className="settings">
@@ -186,6 +187,17 @@ export function SettingsPanel() {
                 <Slider label="Luz (na stronę)" value={cp.base.clearance} min={0.1} max={0.6} step={0.05} unit="mm" onChange={(v) => setB({ clearance: v })} hint="0,2 mm = ciasno, 0,3 mm = typowo dla A1, 0,4 mm = luźno." />
                 <Slider label="Głębokość slotu" value={cp.base.slotDepth} min={2} max={15} step={0.5} unit="mm" onChange={(v) => setB({ slotDepth: v })} hint="Cokół zostanie podniesiony, jeśli slot się nie zmieści." />
                 <Slider label="Szerokość języka" value={cp.base.tongueWidth} min={0} max={60} step={1} unit="mm" onChange={(v) => setB({ tongueWidth: v })} hint="0 = automatycznie (70% najszerszej stopy, 6–40 mm)." />
+                <button
+                  className="btn btn-sm"
+                  onClick={exportClearanceSample}
+                  title="Mały cokół z 3 slotami (luz −0,1 / bieżący / +0,1 mm, oznaczone 1–3 wgłębieniami) + kupon języka. Drukuje się kilka minut."
+                >
+                  Pobierz próbkę luzu (3MF)
+                </button>
+                <p className="note">
+                  Sloty: {[cp.base.clearance - 0.1, cp.base.clearance, cp.base.clearance + 0.1].map((x) => Math.max(0.05, x).toFixed(2)).join(' / ')} mm
+                  — oznaczone 1, 2, 3 wgłębieniami. Wybierz luz, przy którym język wchodzi pewnie, bez siły.
+                </p>
               </>
             ) : (
               <Slider label="Zagłębienie w cokole" value={cp.base.embed} min={0.2} max={Math.max(0.5, cp.base.height - 0.5)} step={0.1} unit="mm" onChange={(v) => setB({ embed: v })} />

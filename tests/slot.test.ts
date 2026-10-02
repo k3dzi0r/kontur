@@ -53,3 +53,21 @@ describe('podstawka wsuwana', () => {
     expect((xml.match(/<item /g) ?? []).length).toBe(2);
   });
 });
+
+describe('próbka luzu', () => {
+  it('cokolik z 3 slotami + kupon: dwie zamknięte bryły, sloty rosną z luzem', async () => {
+    const { buildClearanceSample } = await import('../src/mesh/calibration');
+    const wasm = await initManifold();
+    const parts = buildClearanceSample(wasm, { thickness: 3, slotDepth: 5, clearances: [0.2, 0.3, 0.4] });
+    expect(parts).toHaveLength(2);
+    for (const p of parts) {
+      expect(p.report.closed && p.report.manifold && p.report.consistentOrientation, p.name).toBe(true);
+      expect(p.report.components, p.name).toBe(1);
+    }
+    // sloty i wgłębienia odjęte od bloku
+    const b = parts[0].report;
+    const full = (b.bbox.max[0] - b.bbox.min[0]) * (b.bbox.max[1] - b.bbox.min[1]) * (b.bbox.max[2] - b.bbox.min[2]);
+    expect(b.volume).toBeLessThan(full);
+    expect(parts[1].report.bbox.max[2] - parts[1].report.bbox.min[2]).toBeCloseTo(3, 4);
+  });
+});
