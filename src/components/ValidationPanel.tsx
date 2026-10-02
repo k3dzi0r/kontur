@@ -30,12 +30,19 @@ export function ValidationPanel() {
           <Row ok={v.islandsDetected === 0 || v.islandsBridged >= v.islandsDetected} label="Odseparowane elementy" value={`${v.islandsDetected} (połączono ${v.islandsBridged})`} />
         )}
         <Row ok={v.allConnected} label="Wszystko połączone" value={v.allConnected ? 'tak' : 'NIE'} />
+        {r.kind !== 'lithophane' && (
+          <>
         <Row
           ok={minW === null ? null : minW >= minFeature - 1e-3}
           label="Min. wykryta szerokość"
           value={minW === null ? 'nie wyznaczono' : minW >= 5 ? '≥ 5 mm' : minW <= 0.1 ? '≤ 0.10 mm' : `${minW.toFixed(2)} mm`}
         />
         <Row ok={v.thinRegionCount === 0} label={`Miejsca < ${minFeature} mm`} value={String(v.thinRegionCount)} />
+          </>
+        )}
+        {r.kind === 'lithophane' && (
+          <Row ok={r.minThickness >= 0.6} label="Grubość min – maks" value={`${r.minThickness} – ${r.maxThickness} mm`} />
+        )}
         <Row ok={!!m && m.closed && m.manifold && m.consistentOrientation} label="Siatka zamknięta / manifold" value={m ? (m.closed && m.manifold ? 'tak' : 'NIE') : '—'} />
         <Row ok={null} label="Bounding box (X×Y×Z)" value={size ? `${size[0]} × ${size[1]} × ${size[2]} mm` : '—'} />
         <Row ok={null} label="Trójkąty / bryły" value={m ? `${m.triangles.toLocaleString('pl-PL')} / ${m.components}` : '—'} />
@@ -79,7 +86,7 @@ export function ValidationPanel() {
       {ms !== null && (
         <p className="timing">
           Wygenerowano w {(ms / 1000).toFixed(2)} s (2D {(output.timings.geometry2D / 1000).toFixed(2)} s · 3D{' '}
-          {(output.timings.solid3D / 1000).toFixed(2)} s)
+          {(output.timings.solid3D / 1000).toFixed(2)} s · walidacja {(output.timings.validate / 1000).toFixed(2)} s)
         </p>
       )}
     </div>

@@ -34,7 +34,7 @@ export function Toolbar() {
       <button className={`btn btn-primary ${stale ? 'pulse' : ''}`} onClick={generate} disabled={!source || busy}>
         {status === 'generating' ? 'Generuję…' : 'Generuj'}
       </button>
-      {mode !== 'relief' && (
+      {(mode === 'cutout' || mode === 'slotBase') && (
       <button className={`btn ${unfixed ? 'btn-danger' : ''}`} onClick={fixIslands} disabled={!source || busy || !unfixed} title="Dodaj automatyczne mostki do odseparowanych wysp">
         Napraw wyspy
       </button>

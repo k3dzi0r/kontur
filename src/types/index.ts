@@ -226,7 +226,36 @@ export interface ReliefResult2D {
   scale: number;
 }
 
-export type Result2D = CutoutResult2D | ReliefResult2D;
+export interface LithophaneParams {
+  sizeMode: 'width' | 'height';
+  targetSize: number;
+  /** Grubość w najjaśniejszych miejscach, mm. */
+  minThickness: number;
+  /** Grubość w najciemniejszych miejscach, mm. */
+  maxThickness: number;
+  /** Odstęp próbek siatki, mm (mniejszy = więcej detali i większy plik). */
+  resolution: number;
+  /** Ramka o maksymalnej grubości wokół obrazu, mm (0 = brak). */
+  frameWidth: number;
+  /** Krzywa tonalna: t = (1 - jasność)^gamma. */
+  gamma: number;
+  /** Negatyw (jasne = grube). */
+  invert: boolean;
+}
+
+export interface LithophaneResult2D {
+  kind: 'lithophane';
+  /** Siatka grubości (wiersze od góry obrazu), mm. */
+  thickness: Float32Array;
+  nx: number;
+  ny: number;
+  width: number;
+  height: number;
+  minThickness: number;
+  maxThickness: number;
+}
+
+export type Result2D = CutoutResult2D | ReliefResult2D | LithophaneResult2D;
 
 export interface CutoutResult2D {
   kind: 'cutout';

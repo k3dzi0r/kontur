@@ -1,38 +1,71 @@
 import type { MeshData, MeshReport } from '../types';
 
-/**
- * Niezależna (od manifold-3d) walidacja siatki trójkątów:
- * - scalanie wierzchołków po pozycji (tak jak robi to slicer czytający STL),
- * - zamkniętość: każda krawędź należy do dokładnie 2 trójkątów,
- * - spójna orientacja: każda krawędź skierowana występuje raz, a jej odwrotność raz,
- * - komponenty spójne (union-find po wspólnych krawędziach),
- * - objętość ze znakiem, genus z charakterystyki Eulera, bbox.
- */
+// Niezależna (od manifold-3d) walidacja siatki trójkątów:
+// - scalanie wierzchołków po pozycji (tak jak robi to slicer czytający STL),
+// - zamkniętość: każda krawędź należy do dokładnie 2 trójkątów,
+// - spójna orientacja: każda krawędź skierowana występuje raz, a jej odwrotność raz,
+// - komponenty spójne (union-find po wspólnych krawędziach),
+// - objętość ze znakiem, genus z charakterystyki Eulera, bbox.
+// Hash tablice z adresowaniem otwartym na typed arrays — siatki lithophane
+// mają ~10⁶ trójkątów, a Map z kluczami tekstowymi był o rząd wielkości wolniejszy.
+
+/** Tablica (klucz: para liczb całkowitych zakodowana jako double) → int. */
+class PairMap {
+  private keys: Float64Array;
+  private vals: Int32Array;
+  private used: Uint8Array;
+  private mask: number;
+  size = 0;
+
+  constructor(capacity: number) {
+    let n = 16;
+    while (n < capacity * 2) n <<= 1;
+    this.keys = new Float64Array(n);
+    this.vals = new Int32Array(n);
+    this.used = new Uint8Array(n);
+    this.mask = n - 1;
+  }
+
+  private slot(k: number): number {
+    // mieszanie dwóch 32-bitowych połówek klucza
+    const lo = k % 4294967296 | 0;
+    const hi = (k / 4294967296) | 0;
+    let h = Math.imul(lo ^ Math.imul(hi, 0x9e3779b1), 0x85ebca6b);
+    h ^= h >>> 13;
+    h = Math.imul(h, 0xc2b2ae35);
+    h ^= h >>> 16;
+    let i = h & this.mask;
+    while (this.used[i] && this.keys[i] !== k) i = (i + 1) & this.mask;
+    return i;
+  }
+
+  get(k: number): number | undefined {
+    const i = this.slot(k);
+    return this.used[i] ? this.vals[i] : undefined;
+  }
+
+  set(k: number, v: number): void {
+    const i = this.slot(k);
+    if (!this.used[i]) {
+      this.used[i] = 1;
+      this.keys[i] = k;
+      this.size++;
+    }
+    this.vals[i] = v;
+  }
+
+  /** Iteracja po (klucz, wartość). */
+  forEach(fn: (k: number, v: number) => void): void {
+    for (let i = 0; i < this.used.length; i++) if (this.used[i]) fn(this.keys[i], this.vals[i]);
+  }
+}
+
 export function validateMesh(mesh: MeshData, weldTolerance = 1e-4): MeshReport {
   const { positions, indices } = mesh;
   const nv = positions.length / 3;
   const nt = indices.length / 3;
 
-  // scalanie wierzchołków
-  const inv = 1 / weldTolerance;
-  const map = new Map<string, number>();
-  const remap = new Int32Array(nv);
-  let welded = 0;
-  for (let i = 0; i < nv; i++) {
-    const k = `${Math.round(positions[i * 3] * inv)},${Math.round(positions[i * 3 + 1] * inv)},${Math.round(positions[i * 3 + 2] * inv)}`;
-    let id = map.get(k);
-    if (id === undefined) {
-      id = welded++;
-      map.set(k, id);
-    }
-    remap[i] = id;
-  }
-
-  const directed = new Map<number, number>(); // klucz krawędzi skierowanej → licznik
-  const undirected = new Map<number, number[]>(); // krawędź → trójkąty
-  const ekey = (a: number, b: number) => a * welded + b;
-  let degenerate = 0;
-  let volume = 0;
+  // bbox
   const min: [number, number, number] = [Infinity, Infinity, Infinity];
   const max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
   for (let i = 0; i < nv; i++) {
@@ -43,52 +76,89 @@ export function validateMesh(mesh: MeshData, weldTolerance = 1e-4): MeshReport {
     }
   }
 
+  // scalanie wierzchołków: kwantyzacja do siatki weldTolerance, hash trójki liczb
+  const inv = 1 / weldTolerance;
+  const qx = new Int32Array(nv);
+  const qy = new Int32Array(nv);
+  const qz = new Int32Array(nv);
+  let size = 16;
+  while (size < nv * 2) size <<= 1;
+  const tmask = size - 1;
+  const table = new Int32Array(size).fill(-1);
+  const remap = new Int32Array(nv);
+  let welded = 0;
+  for (let i = 0; i < nv; i++) {
+    const x = Math.round((positions[i * 3] - min[0]) * inv);
+    const y = Math.round((positions[i * 3 + 1] - min[1]) * inv);
+    const z = Math.round((positions[i * 3 + 2] - min[2]) * inv);
+    qx[i] = x;
+    qy[i] = y;
+    qz[i] = z;
+    let h = (Math.imul(x, 73856093) ^ Math.imul(y, 19349663) ^ Math.imul(z, 83492791)) & tmask;
+    let found = -1;
+    while (table[h] !== -1) {
+      const j = table[h];
+      if (qx[j] === x && qy[j] === y && qz[j] === z) {
+        found = remap[j];
+        break;
+      }
+      h = (h + 1) & tmask;
+    }
+    if (found >= 0) remap[i] = found;
+    else {
+      table[h] = i;
+      remap[i] = welded++;
+    }
+  }
+
+  const ekey = (a: number, b: number) => a * welded + b;
+  // krawędź skierowana → liczba wystąpień oraz pierwszy trójkąt
+  const count = new PairMap(nt * 3);
+  const owner = new PairMap(nt * 3);
+  let degenerate = 0;
+  let volume = 0;
+  const valid = new Uint8Array(nt);
   for (let t = 0; t < nt; t++) {
     const ia = indices[t * 3];
     const ib = indices[t * 3 + 1];
     const ic = indices[t * 3 + 2];
-    const v = [remap[ia], remap[ib], remap[ic]];
-    if (v[0] === v[1] || v[1] === v[2] || v[0] === v[2]) {
+    const a = remap[ia];
+    const b = remap[ib];
+    const c = remap[ic];
+    if (a === b || b === c || a === c) {
       degenerate++;
       continue;
     }
+    valid[t] = 1;
     const ax = positions[ia * 3], ay = positions[ia * 3 + 1], az = positions[ia * 3 + 2];
     const bx = positions[ib * 3], by = positions[ib * 3 + 1], bz = positions[ib * 3 + 2];
     const cx = positions[ic * 3], cy = positions[ic * 3 + 1], cz = positions[ic * 3 + 2];
     volume += (ax * (by * cz - bz * cy) - ay * (bx * cz - bz * cx) + az * (bx * cy - by * cx)) / 6;
+    const v = [a, b, c];
     for (let e = 0; e < 3; e++) {
-      const a = v[e];
-      const b = v[(e + 1) % 3];
-      const dk = ekey(a, b);
-      directed.set(dk, (directed.get(dk) ?? 0) + 1);
-      const uk = a < b ? ekey(a, b) : ekey(b, a);
-      const list = undirected.get(uk);
-      if (list) list.push(t);
-      else undirected.set(uk, [t]);
+      const k = ekey(v[e], v[(e + 1) % 3]);
+      count.set(k, (count.get(k) ?? 0) + 1);
+      if (owner.get(k) === undefined) owner.set(k, t);
     }
   }
 
+  // zamkniętość / manifold / orientacja z liczników krawędzi skierowanych
   let closed = true;
   let manifold = true;
-  for (const tris of undirected.values()) {
-    if (tris.length < 2) closed = false;
-    if (tris.length !== 2) manifold = false;
-  }
   let consistent = true;
-  for (const [k, c] of directed) {
-    if (c !== 1) {
-      consistent = false;
-      break;
-    }
+  let undirectedEdges = 0;
+  count.forEach((k, c) => {
     const a = Math.floor(k / welded);
     const b = k - a * welded;
-    if (directed.get(ekey(b, a)) !== 1) {
-      consistent = false;
-      break;
-    }
-  }
+    const rev = count.get(ekey(b, a)) ?? 0;
+    if (a < b || rev === 0) undirectedEdges++;
+    const total = c + rev;
+    if (total < 2) closed = false;
+    if (total !== 2) manifold = false;
+    if (c !== 1 || rev !== 1) consistent = false;
+  });
 
-  // komponenty
+  // komponenty: union-find po trójkątach sąsiadujących przez krawędź
   const parent = new Int32Array(nt);
   for (let i = 0; i < nt; i++) parent[i] = i;
   const find = (x: number): number => {
@@ -98,28 +168,44 @@ export function validateMesh(mesh: MeshData, weldTolerance = 1e-4): MeshReport {
     }
     return x;
   };
-  for (const tris of undirected.values()) {
-    for (let i = 1; i < tris.length; i++) {
-      const ra = find(tris[0]);
-      const rb = find(tris[i]);
-      if (ra !== rb) parent[ra] = rb;
+  const unite = (x: number, y: number) => {
+    const rx = find(x);
+    const ry = find(y);
+    if (rx !== ry) parent[rx] = ry;
+  };
+  owner.forEach((k, t) => {
+    const a = Math.floor(k / welded);
+    const b = k - a * welded;
+    const r = owner.get(ekey(b, a));
+    if (r !== undefined) unite(t, r);
+  });
+  // ten sam kierunek w dwóch trójkątach (zła orientacja) — też sąsiedztwo
+  for (let t = 0; t < nt; t++) {
+    if (!valid[t]) continue;
+    const v = [remap[indices[t * 3]], remap[indices[t * 3 + 1]], remap[indices[t * 3 + 2]]];
+    for (let e = 0; e < 3; e++) {
+      const o = owner.get(ekey(v[e], v[(e + 1) % 3]));
+      if (o !== undefined && o !== t) unite(t, o);
     }
   }
   const roots = new Set<number>();
+  const usedVerts = new Uint8Array(welded);
+  let V = 0;
   for (let t = 0; t < nt; t++) {
-    const ia = indices[t * 3], ib = indices[t * 3 + 1], ic = indices[t * 3 + 2];
-    if (remap[ia] === remap[ib] || remap[ib] === remap[ic] || remap[ia] === remap[ic]) continue;
+    if (!valid[t]) continue;
     roots.add(find(t));
+    for (let k = 0; k < 3; k++) {
+      const w = remap[indices[t * 3 + k]];
+      if (!usedVerts[w]) {
+        usedVerts[w] = 1;
+        V++;
+      }
+    }
   }
   const components = roots.size;
-
-  // Euler: V - E + F = 2(C - g)
-  const usedVerts = new Set<number>();
-  for (let t = 0; t < nt; t++) for (let k = 0; k < 3; k++) usedVerts.add(remap[indices[t * 3 + k]]);
-  const V = usedVerts.size;
-  const E = undirected.size;
   const F = nt - degenerate;
-  const genus = closed && manifold ? Math.round(components - (V - E + F) / 2) : -1;
+  // Euler: V - E + F = 2(C - g)
+  const genus = closed && manifold ? Math.round(components - (V - undirectedEdges + F) / 2) : -1;
 
   return {
     triangles: nt,

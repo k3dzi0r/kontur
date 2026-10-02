@@ -1,4 +1,4 @@
-import type { CutoutParams, ImageParams, ReliefParams } from './types';
+import type { CutoutParams, ImageParams, LithophaneParams, ReliefParams } from './types';
 
 export const DEFAULT_IMAGE_PARAMS: ImageParams = {
   maxResolution: 1000,
@@ -50,6 +50,17 @@ export const DEFAULT_RELIEF_PARAMS: ReliefParams = {
   engrave: false,
   frameWidth: 0,
   hangHole: 0,
+};
+
+export const DEFAULT_LITHOPHANE_PARAMS: LithophaneParams = {
+  sizeMode: 'width',
+  targetSize: 100,
+  minThickness: 0.8,
+  maxThickness: 3.0,
+  resolution: 0.25,
+  frameWidth: 3,
+  gamma: 1,
+  invert: false,
 };
 
 export interface PrinterPreset {

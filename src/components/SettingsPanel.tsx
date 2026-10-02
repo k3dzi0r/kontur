@@ -16,6 +16,9 @@ export function SettingsPanel() {
   const mode = useStore((s) => s.mode);
   const rp = useStore((s) => s.reliefParams);
   const setR = useStore((s) => s.setReliefParams);
+  const lp = useStore((s) => s.lithophaneParams);
+  const setL = useStore((s) => s.setLithophaneParams);
+  const litho = mode === 'lithophane';
 
   return (
     <div className="settings">
@@ -29,20 +32,24 @@ export function SettingsPanel() {
       </Section>
 
       <Section
-        title="Binaryzacja"
+        title={litho ? 'Obraz' : 'Binaryzacja'}
         aside={
-          otsu !== null && (
+          !litho && otsu !== null && (
             <button className="btn btn-ghost btn-sm" onClick={() => setI({ threshold: Math.round(otsu) })} title="Automatyczny próg metodą Otsu">
               Auto ({Math.round(otsu)})
             </button>
           )
         }
       >
-        <Slider label="Próg" value={ip.threshold} min={1} max={254} step={1} onChange={(v) => setI({ threshold: v })} hint="Piksele ciemniejsze niż próg stają się materiałem." />
+        {!litho && <Slider label="Próg" value={ip.threshold} min={1} max={254} step={1} onChange={(v) => setI({ threshold: v })} hint="Piksele ciemniejsze niż próg stają się materiałem." />}
         <Slider label="Wygładzanie (blur)" value={ip.blur} min={0} max={8} step={0.5} unit="px" onChange={(v) => setI({ blur: v })} />
+        {!litho && (
+          <>
         <Slider label="Usuwanie szumu" value={ip.noiseArea} min={0} max={500} step={1} unit="px²" onChange={(v) => setI({ noiseArea: v })} hint="Usuwa plamki i wypełnia dziurki mniejsze niż podane pole." />
         <Slider label="Domykanie przerw" value={ip.closeGaps} min={0} max={10} step={0.5} unit="px" onChange={(v) => setI({ closeGaps: v })} hint="Zamknięcie morfologiczne — skleja kreski oddzielone wąską szczeliną." />
         <Toggle label="Odwróć (biały = materiał)" checked={ip.invert} onChange={(v) => setI({ invert: v })} />
+          </>
+        )}
         <Slider
           label="Rozdzielczość analizy"
           value={ip.maxResolution}
@@ -55,7 +62,30 @@ export function SettingsPanel() {
         />
       </Section>
 
-      {mode === 'relief' ? (
+      {litho ? (
+        <>
+          <Section title="Wymiary">
+            <Select<'width' | 'height'>
+              label="Skaluj według"
+              value={lp.sizeMode}
+              options={[
+                { value: 'width', label: 'Szerokość obrazu' },
+                { value: 'height', label: 'Wysokość obrazu' },
+              ]}
+              onChange={(v) => setL({ sizeMode: v })}
+            />
+            <Slider label={lp.sizeMode === 'width' ? 'Szerokość obrazu' : 'Wysokość obrazu'} value={lp.targetSize} min={30} max={240} step={1} unit="mm" onChange={(v) => setL({ targetSize: v })} />
+            <Slider label="Ramka" value={lp.frameWidth} min={0} max={15} step={0.5} unit="mm" onChange={(v) => setL({ frameWidth: v })} hint="Ramka o maksymalnej grubości — usztywnia płytkę." />
+          </Section>
+          <Section title="Grubość">
+            <Slider label="Min. (najjaśniejsze)" value={lp.minThickness} min={0.4} max={3} step={0.05} unit="mm" onChange={(v) => setL({ minThickness: v })} />
+            <Slider label="Maks. (najciemniejsze)" value={lp.maxThickness} min={1} max={8} step={0.1} unit="mm" onChange={(v) => setL({ maxThickness: v })} />
+            <Slider label="Gamma" value={lp.gamma} min={0.3} max={3} step={0.05} onChange={(v) => setL({ gamma: v })} hint="<1 rozjaśnia półtony, >1 przyciemnia." />
+            <Toggle label="Negatyw" checked={lp.invert} onChange={(v) => setL({ invert: v })} />
+            <Slider label="Odstęp próbek" value={lp.resolution} min={0.1} max={1} step={0.05} unit="mm" onChange={(v) => setL({ resolution: v })} hint="Mniejszy = więcej detali i większy plik. 0,2–0,3 mm dla dyszy 0,4." />
+          </Section>
+        </>
+      ) : mode === 'relief' ? (
         <>
       <Section title="Wymiary wzoru">
         <Select<'width' | 'height'>

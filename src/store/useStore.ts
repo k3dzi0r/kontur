@@ -1,7 +1,13 @@
 import { create } from 'zustand';
-import type { BinaryMask, BridgeEdit, CutoutParams, ImageParams, ModeId, ReliefParams } from '../types';
+import type { BinaryMask, BridgeEdit, CutoutParams, ImageParams, LithophaneParams, ModeId, ReliefParams } from '../types';
 import type { GenerateJob, ModeOutput } from '../pipeline';
-import { DEFAULT_CUTOUT_PARAMS, DEFAULT_IMAGE_PARAMS, DEFAULT_RELIEF_PARAMS, PRINTER_PRESETS } from '../presets';
+import {
+  DEFAULT_CUTOUT_PARAMS,
+  DEFAULT_IMAGE_PARAMS,
+  DEFAULT_LITHOPHANE_PARAMS,
+  DEFAULT_RELIEF_PARAMS,
+  PRINTER_PRESETS,
+} from '../presets';
 import { PipelineClient } from '../worker/client';
 import { rasterize } from '../image/load';
 import { rasterToGray } from '../image/process';
@@ -25,6 +31,7 @@ interface State {
   imageParams: ImageParams;
   cutoutParams: CutoutParams;
   reliefParams: ReliefParams;
+  lithophaneParams: LithophaneParams;
   presetId: string;
   mask: BinaryMask | null;
   otsu: number | null;
@@ -40,6 +47,7 @@ interface State {
   setCutoutParams: (p: Partial<CutoutParams>) => void;
   setBaseParams: (p: Partial<CutoutParams['base']>) => void;
   setReliefParams: (p: Partial<ReliefParams>) => void;
+  setLithophaneParams: (p: Partial<LithophaneParams>) => void;
   setMode: (mode: ModeId) => void;
   applyPreset: (id: string) => void;
   generate: () => Promise<void>;
@@ -103,6 +111,7 @@ export const useStore = create<State>((set, get) => {
     imageParams: DEFAULT_IMAGE_PARAMS,
     cutoutParams: DEFAULT_CUTOUT_PARAMS,
     reliefParams: DEFAULT_RELIEF_PARAMS,
+    lithophaneParams: DEFAULT_LITHOPHANE_PARAMS,
     presetId: PRINTER_PRESETS[0].id,
     mask: null,
     otsu: null,
@@ -168,6 +177,10 @@ export const useStore = create<State>((set, get) => {
       set({ reliefParams: { ...get().reliefParams, ...p }, stale: !!get().output });
     },
 
+    setLithophaneParams(p) {
+      set({ lithophaneParams: { ...get().lithophaneParams, ...p }, stale: !!get().output });
+    },
+
     setMode(mode) {
       if (mode === get().mode) return;
       set({ mode, output: null, stale: false, error: null });
@@ -189,13 +202,15 @@ export const useStore = create<State>((set, get) => {
       if (!get().source) return;
       set({ status: 'generating', error: null });
       try {
-        const { mode, cutoutParams, reliefParams } = get();
+        const { mode, cutoutParams, reliefParams, lithophaneParams } = get();
         // „Podstawka wsuwana” = Wycinanka z cokołem typu slot (wspólne parametry i edycje mostków)
         const baseType = mode === 'slotBase' ? 'slot' : 'fused';
         const job: GenerateJob =
           mode === 'relief'
             ? { mode: 'relief', params: reliefParams }
-            : {
+            : mode === 'lithophane'
+              ? { mode: 'lithophane', params: lithophaneParams }
+              : {
                 mode: 'cutout',
                 params: {
                   ...cutoutParams,
@@ -255,7 +270,8 @@ export const useStore = create<State>((set, get) => {
         );
         if (!ok) return;
       }
-      const suffix = output.result2D.kind === 'relief' ? '-relief' : get().mode === 'slotBase' ? '-wsuwana' : '';
+      const kind = output.result2D.kind;
+      const suffix = kind === 'relief' ? '-relief' : kind === 'lithophane' ? '-lithophane' : get().mode === 'slotBase' ? '-wsuwana' : '';
       const name = baseName(source?.name ?? 'wycinanka') + suffix;
       if (format === 'stl') download(exportStl(output.mesh, name), `${name}.stl`, 'model/stl');
       else {

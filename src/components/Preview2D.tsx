@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { BinaryMask, Bridge, CutoutResult2D, MultiPoly, Pt, ReliefResult2D, Result2D } from '../types';
+import type { BinaryMask, Bridge, CutoutResult2D, LithophaneResult2D, MultiPoly, Pt, ReliefResult2D, Result2D } from '../types';
 import { useStore } from '../store/useStore';
 import { multiBBox } from '../geometry/polygon';
 
@@ -53,6 +53,7 @@ function fill(ctx: CanvasRenderingContext2D, mp: MultiPoly, v: View, color: stri
 
 function sceneBounds(r: Result2D) {
   if (r.kind === 'relief') return multiBBox(r.plate);
+  if (r.kind === 'lithophane') return { minX: -r.width / 2, minY: -r.height / 2, maxX: r.width / 2, maxY: r.height / 2 };
   const b = multiBBox(r.figure);
   if (r.base) {
     b.minX = Math.min(b.minX, r.base.x0);
@@ -117,6 +118,36 @@ function drawThin(ctx: CanvasRenderingContext2D, thin: MultiPoly, thickened: Mul
     ctx.arc(cx, cy, rad, 0, Math.PI * 2);
     ctx.stroke();
   }
+}
+
+/**
+ * Symulacja podświetlenia: przepuszczalność ~ exp(-α·t), α ≈ 1,2 / mm
+ * (biały PLA), znormalizowana do zakresu grubości.
+ */
+function lithoBitmap(r: LithophaneResult2D): HTMLCanvasElement {
+  const c = document.createElement('canvas');
+  c.width = r.nx;
+  c.height = r.ny;
+  const ctx = c.getContext('2d')!;
+  const img = ctx.createImageData(r.nx, r.ny);
+  const a = 1.2;
+  const tMax = Math.exp(-a * r.minThickness);
+  const tMin = Math.exp(-a * r.maxThickness);
+  for (let i = 0; i < r.thickness.length; i++) {
+    const b = (Math.exp(-a * r.thickness[i]) - tMin) / (tMax - tMin || 1);
+    img.data[i * 4] = 255 * b;
+    img.data[i * 4 + 1] = 236 * b;
+    img.data[i * 4 + 2] = 200 * b;
+    img.data[i * 4 + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  return c;
+}
+
+function drawLitho(ctx: CanvasRenderingContext2D, r: LithophaneResult2D, bmp: HTMLCanvasElement, v: View, w: number, h: number) {
+  drawGrid(ctx, v, w, h);
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(bmp, v.tx - (r.width / 2) * v.scale, v.ty - (r.height / 2) * v.scale, r.width * v.scale, r.height * v.scale);
 }
 
 function drawRelief(ctx: CanvasRenderingContext2D, r: ReliefResult2D, v: View, w: number, h: number) {
@@ -335,6 +366,7 @@ export function Preview2D() {
   const cut = r?.kind === 'cutout' ? r : null;
   const canEdit = editing && !!cut;
   const maskBmp = useMemo(() => (mask ? maskToBitmap(mask) : null), [mask]);
+  const lithoBmp = useMemo(() => (r?.kind === 'lithophane' ? lithoBitmap(r) : null), [r]);
 
   const fitView = useCallback(() => {
     const el = wrapRef.current;
@@ -375,6 +407,7 @@ export function Preview2D() {
       if (!view.current) fitView();
       if (view.current) {
         if (r.kind === 'relief') drawRelief(ctx, r, view.current, w, h);
+        else if (r.kind === 'lithophane') drawLitho(ctx, r, lithoBmp!, view.current, w, h);
         else drawGeometry(ctx, r, view.current, w, h, { hover: hover.current, drawing: drawing.current, editing: canEdit });
       }
     } else if (mask && maskBmp) {
@@ -383,7 +416,7 @@ export function Preview2D() {
       ctx.imageSmoothingEnabled = s < 1;
       ctx.drawImage(bmp, (w - mask.width * s) / 2, (h - mask.height * s) / 2, mask.width * s, mask.height * s);
     }
-  }, [geometryMode, r, mask, maskBmp, fitView, canEdit]);
+  }, [geometryMode, r, mask, maskBmp, lithoBmp, fitView, canEdit]);
 
   useEffect(() => {
     draw();
@@ -488,7 +521,7 @@ export function Preview2D() {
         <canvas ref={canvasRef} />
       </div>
       <div className="viewport-overlay">
-        {r && (
+        {r && r.kind !== 'lithophane' && (
           <div className="seg">
             <button className={showGeometry ? 'on' : ''} onClick={() => setShowGeometry(true)}>
               Geometria
@@ -526,6 +559,14 @@ export function Preview2D() {
           <span><i style={{ background: COLORS.pattern }} />wzór {r.pattern.length ? '' : '(brak)'}</span>
           <span><i style={{ background: COLORS.thin }} />za cienkie</span>
           <span>płytka {r.plateWidth.toFixed(1)} × {r.plateHeight.toFixed(1)} mm</span>
+        </div>
+      )}
+      {geometryMode && r?.kind === 'lithophane' && (
+        <div className="legend">
+          <span>Symulacja podświetlenia</span>
+          <span>{r.width.toFixed(1)} × {r.height.toFixed(1)} mm</span>
+          <span>grubość {r.minThickness}–{r.maxThickness} mm</span>
+          <span>siatka {r.nx}×{r.ny}</span>
         </div>
       )}
       {geometryMode && cut && (

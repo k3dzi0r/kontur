@@ -48,8 +48,8 @@ self.onmessage = async (ev: MessageEvent<WorkerRequest>) => {
     } else if (req.type === 'generate') {
       const kernel = await ready;
       const t = performance.now();
-      const mask = maskFor(req.imageParams);
-      const output = runJob(kernel, mask, req.job);
+      const ip = req.imageParams;
+      const output = runJob(kernel, { mask: () => maskFor(ip), gray: () => gaussianBlur(gray!, ip.blur) }, req.job);
       const transfer: Transferable[] = output ? [output.mesh.positions.buffer, output.mesh.indices.buffer] : [];
       post({ type: 'generate', id: req.id, output, ms: performance.now() - t }, transfer);
     }

@@ -2,7 +2,7 @@ import type { ModeId } from '../types';
 
 // Rejestr trybów generatora. Każdy tryb dostaje maskę / obraz w skali szarości
 // i parametry, a zwraca bryłę + raport walidacji (wspólny eksport STL/3MF).
-// Zaimplementowane: „cutout”, „relief”, „slotBase” (cutout z cokołem typu slot); „lithophane” zarezerwowany.
+// Tryby: „cutout”, „relief”, „slotBase” (cutout z cokołem typu slot), „lithophane”.
 
 export interface ModeInfo {
   id: ModeId;
@@ -27,8 +27,8 @@ export const MODES: ModeInfo[] = [
   {
     id: 'lithophane',
     label: 'Lithophane',
-    description: 'Grubość zależna od jasności pikseli. (TODO: heightmap → siatka)',
-    available: false,
+    description: 'Grubość zależna od jasności pikseli — obraz widoczny pod światło.',
+    available: true,
   },
   {
     id: 'slotBase',
