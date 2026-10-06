@@ -12,6 +12,10 @@ npm test           # vitest (geometria, mesh, eksport)
 npm run build      # typecheck + build produkcyjny z service workerem (PWA, offline)
 ```
 
+Wdrożenie: GitHub Pages przez `.github/workflows/pages.yml` — każdy push na `master` uruchamia testy,
+build i publikację `dist/` (Settings → Pages → Source: GitHub Actions). Aplikacja jest w pełni statyczna;
+`base: './'` w `vite.config.ts` pozwala działać pod podścieżką `/<repo>/`.
+
 Przykładowe obrazy: `public/sample-*.png` (dostępne też z pustego podglądu 2D).
 Regeneracja ikon i przykładów: `npm run gen:assets`.
 
